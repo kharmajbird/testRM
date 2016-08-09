@@ -1,0 +1,42 @@
+#!/bin/sh
+
+if [ ! -f certs/domain.key ]; then
+    mkdir -p auth certs
+
+    openssl req -new > certs/domain.csr
+    openssl rsa -in certs/privkey.pem -out certs/key.pem
+    mv privkey.pem certs
+    openssl x509 -in certs/domain.csr -out certs/domain.pem -req -signkey certs/key.pem -days 1001
+    cat certs/key.pem >> certs/domain.pem
+
+fi
+
+docker run -d -p 5000:5000 \
+    --restart=always \
+    --name registry \
+    -v `pwd`/data:/var/lib/registry \
+    -v `pwd`/certs:/certs \
+    -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt \
+    -e REGISTRY_HTTP_TLS_KEY=/certs/domain.key \
+registry:2
+
+if [ ! -f auth/htpasswd ]; then
+    docker run --entrypoint htpasswd registry:2 -Bbn routematch routepass  > auth/htpasswd
+fi
+
+docker kill `docker ps| grep agent| awk '{ print $1 }'`
+
+docker run -d -p 5000:5000 \
+    --restart=always \
+    --name registry \
+    -v `pwd`/data:/var/lib/registry \
+    -v `pwd`/certs:/certs \
+    -v `pwd`/auth:/auth \
+    -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt \
+    -e REGISTRY_HTTP_TLS_KEY=/certs/domain.key \
+    -e "REGISTRY_AUTH=htpasswd" \
+    -e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
+    -e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
+registry:2
+
+docker login routematch.com:5000
