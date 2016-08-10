@@ -2,14 +2,13 @@
 
 # docker-machine create --driver virtualbox --engine-insecure-registry localhost:5000 default
 
-if [ ! -f certs/domain.key ]; then
+if [ ! -f certs/domain.csr ]; then
     mkdir -p auth certs data
 
-    openssl req -new > certs/domain.csr
-    mv privkey.pem certs
-    openssl rsa -in certs/privkey.pem -out certs/key.pem
-    openssl x509 -in certs/domain.csr -out certs/domain.pem -req -signkey certs/key.pem -days 1001
-    cat certs/key.pem >> certs/domain.pem
+    openssl genrsa -des3 -out certs/domain.key 2048
+    openssl rsa -in certs/domain.key -out certs/domain.key
+    openssl req -sha256 -new -key certs/domain.key -out certs/domain.csr -subj '/CN=localhost'
+    openssl x509 -req -days 1001 -in certs/domain.csr -signkey certs/domain.key -out certs/domain.crt
 
 fi
 
@@ -28,7 +27,7 @@ fi
 
 sleep 5
 docker kill `docker ps| grep registry| awk '{ print $1 }'`
-docker rm `docker ps| grep registry| awk '{ print $1 }'`
+docker rm `docker ps -a| grep registry| awk '{ print $1 }'`
 
 docker run -d -p 5000:5000 \
     --restart=always \
