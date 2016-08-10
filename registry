@@ -1,11 +1,13 @@
 #!/bin/sh
 
+# docker-machine create --driver virtualbox --engine-insecure-registry localhost:5000 default
+
 if [ ! -f certs/domain.key ]; then
-    mkdir -p auth certs
+    mkdir -p auth certs data
 
     openssl req -new > certs/domain.csr
-    openssl rsa -in certs/privkey.pem -out certs/key.pem
     mv privkey.pem certs
+    openssl rsa -in certs/privkey.pem -out certs/key.pem
     openssl x509 -in certs/domain.csr -out certs/domain.pem -req -signkey certs/key.pem -days 1001
     cat certs/key.pem >> certs/domain.pem
 
@@ -24,7 +26,9 @@ if [ ! -f auth/htpasswd ]; then
     docker run --entrypoint htpasswd registry:2 -Bbn routematch routepass  > auth/htpasswd
 fi
 
-docker kill `docker ps| grep agent| awk '{ print $1 }'`
+sleep 5
+docker kill `docker ps| grep registry| awk '{ print $1 }'`
+docker rm `docker ps| grep registry| awk '{ print $1 }'`
 
 docker run -d -p 5000:5000 \
     --restart=always \
@@ -39,4 +43,4 @@ docker run -d -p 5000:5000 \
     -e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
 registry:2
 
-docker login routematch.com:5000
+docker login localhost:5000
